@@ -1,7 +1,7 @@
 # Dossier de Projet : Agenda en Ligne
 
 [https://xpeuvr327.github.io/agenda-concours/](https://xpeuvr327.github.io/agenda-concours/)
-![](readme/0qr_to_here.gif)
+![](readme/img/0qr_to_here.gif)
 ## Énoncé du problème
 
 Les étudiants ont souvent du mal à suivre leurs cours et événements sans un agenda organisé. Les agendas traditionnels peuvent être fastidieux à utiliser, et il n'existe pas de solution simple, gratuite, et open-source pour gérer les emplois du temps.
