@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Semaine de Base</title>
+    <link href="styles.css" rel="stylesheet">
+    <link href="https://unpkg.com/franken-ui@2.0.0/dist/css/core.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/franken-ui@2.0.0/dist/js/core.iife.js" type="module"></script>
+    <script src="https://unpkg.com/franken-ui@2.0.0/dist/js/icon.iife.js" type="module"></script>
+    <link href="https://unpkg.com/franken-ui@internal/dist/css/core.min.css" rel="stylesheet">
+    <link href="https://unpkg.com/franken-ui@internal/dist/css/utilities.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+</head>
+<body>
+<div style="text-align:center">
+    <h1 class="font-bold text-3xl">Semaine de Base</h1>
+</div>
+<p class="p-4">Cette page sert à créer l'horaire sur lequel l'appli se basera.</p>
+<div class="container">
+    <div class="header">
+        <span id="monthSpace"></span>
+    </div>
+    <table class="planner-table" id="planner"></table>
+    <br>
+    <input accept=".json" class="upload-input" id="uploadJson" type="file">
+    <label class="custom-file-upload" for="uploadJson" tabindex="0">Choisir un fichier de Planning</label>
+    <button class="action-button" id="downloadUpdatedJson">Télécharger le planning tel qu'on le voit (va aller dans "choisir un fichier planning")</button>
+</div>
+<script src="main.js"></script>
+<script>
+const dayMapping = {
+    a: 'Lundi',
+    b: 'Mardi',
+    c: 'Mercredi',
+    d: 'Jeudi',
+    e: 'Vendredi'
+};
+// Create the reverse mapping correctly (only once)
+const reverseDayMapping = Object.fromEntries(
+  Object.entries(dayMapping).map(([key, value]) => [value, key])
+);
+
+function createTableHeaders(table, days) {
+  const headerRow = document.createElement("tr");
+  const header = document.createElement("th");
+  header.textContent = "Heure/Jour";
+  headerRow.appendChild(header);
+  
+  days.forEach(day => {
+    const header = document.createElement("th");
+    header.textContent = day;
+    headerRow.appendChild(header);
+  });
+  
+  table.appendChild(headerRow);
+}
+
+function initializeWeek0App() {
+  const days = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
+  const schedule = {};
+  
+  Object.keys(dayMapping).forEach(dayLetter => {
+    schedule[dayLetter] = [];
+  });
+  
+  const week0Data = {
+    days: days,
+    schedule: schedule,
+    totalHours: 11,
+    timeScheme: "default"
+  };
+  
+  saveWeekData(week0Data);
+  displayPlanner(week0Data);
+  
+  document.getElementById("uploadJson").addEventListener("change", handleFileUpload);
+  document.getElementById("downloadUpdatedJson").addEventListener("click", downloadUpdatedJson);
+}
+
+function handleFileUpload(event) {
+  const file = event.target.files[0];
+  if (file) {
+    readFile(file);
+  }
+}
+
+function readFile(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      saveWeekData(data);
+      displayPlanner(data);
+      // Update notification to use a normal alert since UIkit might not be available
+      alert("Données de la semaine sauvegardées avec succès.");
+    } catch (error) {
+      console.error("Error parsing JSON file:", error);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function saveWeekData(data) {
+  localStorage.setItem(`week0`, JSON.stringify(data));
+}
+
+function downloadUpdatedJson() {
+  const data = JSON.parse(localStorage.getItem(`week0`));
+  const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(data))}`;
+  const link = document.createElement("a");
+  link.href = jsonString;
+  link.download = `week0.json`;
+  link.click();
+}
+
+function displayPlanner(data) {
+  const table = document.getElementById("planner");
+  table.innerHTML = "";
+  
+  if (!data || !data.days) {
+    // Generate new data if none exists
+    data = generateNewWeekData();
+    saveWeekData(data);
+  }
+  
+  createTableHeaders(table, data.days);
+  createTableData(table, data);
+  
+  if (data.timeScheme) {
+    fetchTimeScheme(data.timeScheme);
+  }
+}
+
+function createTableData(table, data) {
+  let totalHours = data.totalHours;
+  
+  if (totalHours === undefined || totalHours === null || isNaN(totalHours)) {
+    totalHours = 11;
+  } else {
+    totalHours = Math.floor(Number(totalHours));
+  }
+  
+  for (let i = 0; i < totalHours; i++) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.textContent = `Heure ${i + 1}`;
+    row.appendChild(cell);
+    
+    data.days.forEach(day => {
+      const cell = document.createElement("td");
+      const dayLetter = reverseDayMapping[day];
+      cell.id = `${dayLetter}${i + 1}`;
+      
+      if (data.schedule[dayLetter]) {
+        const event = data.schedule[dayLetter].find(e => e.period === i + 1);
+        if (event) {
+          let cellContent = `${event.subject} - ${event.notes}`;
+          if (event.homework && event.homework.length > 0) {
+            cellContent += `<div class="uk-margin-small-top">`;
+            event.homework.forEach(hw => {
+              cellContent += `<span class="uk-badge uk-background-secondary homework-badge" data-day="${dayLetter}" data-period="${i + 1}" data-id="${hw.id}">${hw.title}</span> `;
+            });
+            cellContent += `</div>`;
+          }
+          cell.innerHTML = cellContent;
+        }
+      }
+      
+      addCellClickListener(cell, dayLetter, i + 1, data);
+      row.appendChild(cell);
+    });
+    
+    table.appendChild(row);
+  }
+}
+
+function fetchTimeScheme(timeScheme) {
+  // This is a placeholder - in a real app you'd fetch the time scheme data
+  console.log(`Would fetch time scheme: ${timeScheme}`);
+  // Since we don't have actual time data, we'll just add dummy times
+  displayTimeData({
+    times: Array(11).fill(0).map((_, i) => ({
+      start: `${8 + Math.floor(i/2)}:${i % 2 === 0 ? '00' : '30'}`,
+      end: `${8 + Math.floor(i/2)}:${i % 2 === 0 ? '30' : '55'}`
+    }))
+  });
+}
+
+function displayTimeData(timeData) {
+  for (let i = 0; i < timeData.times.length; i++) {
+    const heureCell = document.querySelector(`tr:nth-child(${i + 2}) td:first-child`);
+    if (heureCell && !heureCell.dataset.timeAdded) {
+      heureCell.innerHTML += `<br>${timeData.times[i].start} - ${timeData.times[i].end}`;
+      heureCell.setAttribute("data-time-added", "true");
+    }
+  }
+}
+
+// Stub for the addCellClickListener function
+function addCellClickListener(cell, dayLetter, period, data) {
+  cell.addEventListener("click", () => {
+    console.log(`Cell clicked: ${dayLetter}${period}`);
+    // For now, we'll just log that the cell was clicked
+    // Full implementation would be added later
+  });
+}
+
+function generateNewWeekData() {
+  const days = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
+  const schedule = {};
+  
+  Object.keys(dayMapping).forEach(dayLetter => {
+    schedule[dayLetter] = [];
+  });
+  
+  return {
+    days: days,
+    schedule: schedule,
+    totalHours: 11,
+    timeScheme: "default"
+  };
+}
+// Initialize the app when the window loads
+window.onload = function() {
+  initializeWeek0App();
+};
+</script>
+</body>
+</html>
